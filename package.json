@@ -1,0 +1,26 @@
+{
+  "name": "n2yo-satellite-tracker-mcp",
+  "version": "1.0.0",
+  "description": "MCP server for N2YO satellite tracking and TLE data",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsc --watch",
+    "prepare": "npm run build"
+  },
+  "keywords": ["mcp", "server", "n2yo", "satellite", "tracking", "tle", "space", "orbital"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
