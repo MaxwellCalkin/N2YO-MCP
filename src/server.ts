@@ -6,6 +6,7 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import { N2YOClient } from "./n2yo-client.js";
 import { SatelliteValidator, ValidationError } from "./satellite-validation.js";
+import { LocationTimeParser } from "./location-time-parser.js";
 
 export class N2YOServer {
   private n2yoClient: N2YOClient;
@@ -28,6 +29,26 @@ export class N2YOServer {
             },
           },
           required: ["apiKey"],
+        },
+      },
+      {
+        name: "query_satellites_natural",
+        description: "Answer natural language questions about satellites like 'What satellites will be over France at 6:00 tonight?'",
+        inputSchema: {
+          type: "object",
+          properties: {
+            query: {
+              type: "string",
+              description: "Natural language query about satellites (e.g., 'What satellites will be over France at 6:00 tonight?', 'Show me military satellites above Germany now')",
+            },
+            categoryFilter: {
+              type: "string",
+              enum: ["all", "military", "weather", "gps", "amateur", "starlink", "space-stations"],
+              default: "all",
+              description: "Optional filter for satellite category",
+            },
+          },
+          required: ["query"],
         },
       },
       {
@@ -220,6 +241,9 @@ export class N2YOServer {
       switch (name) {
         case "set_n2yo_api_key":
           return await this.setApiKey(args.apiKey);
+        
+        case "query_satellites_natural":
+          return await this.querySatellitesNatural(args.query, args.categoryFilter);
         
         case "get_satellite_tle":
           return await this.getSatelliteTle(args.noradId);
@@ -536,6 +560,192 @@ export class N2YOServer {
         },
       ],
     };
+  }
+
+  private async querySatellitesNatural(query: string, categoryFilter: string = "all"): Promise<CallToolResult> {
+    try {
+      // Parse the natural language query
+      const parsed = LocationTimeParser.extractLocationAndTime(query);
+      
+      if (!parsed.location) {
+        return {
+          content: [
+            {
+              type: "text",
+              text: "Could not identify a location in your query. Please specify a location like 'France', 'New York', or 'Germany'.",
+            },
+          ],
+          isError: true,
+        };
+      }
+
+      // Default to current time if no time specified
+      const targetTime = parsed.time?.timestamp || Math.floor(Date.now() / 1000);
+      const timeDescription = parsed.time?.description || "right now";
+
+      // Determine which satellites to get based on the query context
+      let satellites;
+      const categoryId = categoryFilter !== "all" ? this.n2yoClient.getCategoryId(categoryFilter) : 0;
+
+      // Check if query is asking about future time (for predictions) or current/past time (for current position)
+      const timeDiff = targetTime - Math.floor(Date.now() / 1000);
+      
+      if (timeDiff > 300) { // More than 5 minutes in the future
+        // This is a future prediction query - but N2YO "above" endpoint only shows current satellites
+        // We'll get current satellites and note the limitation
+        satellites = await this.n2yoClient.getSatellitesAbove(
+          parsed.location.latitude,
+          parsed.location.longitude,
+          0, // altitude
+          85, // search radius
+          categoryId
+        );
+
+        const filteredSatellites = categoryFilter !== "all" 
+          ? satellites.filter(sat => this.matchesCategoryFilter(sat, categoryFilter))
+          : satellites;
+
+        const response = {
+          query: query,
+          location: {
+            name: parsed.location.name,
+            coordinates: {
+              latitude: parsed.location.latitude,
+              longitude: parsed.location.longitude,
+            },
+          },
+          time: {
+            requested: timeDescription,
+            note: "Showing satellites currently above the location. N2YO API provides current positions, not future predictions for overhead satellites.",
+          },
+          categoryFilter: categoryFilter,
+          satellites: filteredSatellites.map(sat => ({
+            noradId: sat.satid,
+            name: sat.satname,
+            position: {
+              latitude: sat.satlat,
+              longitude: sat.satlng,
+              altitude: sat.satalt,
+            },
+            launchDate: sat.launchDate,
+            internationalDesignator: sat.intDesignator,
+          })),
+          count: filteredSatellites.length,
+          summary: `Found ${filteredSatellites.length} ${categoryFilter === "all" ? "" : categoryFilter + " "}satellites currently above ${parsed.location.name}`,
+        };
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(response, null, 2),
+            },
+          ],
+        };
+
+      } else {
+        // This is a current or near-current time query
+        satellites = await this.n2yoClient.getSatellitesAbove(
+          parsed.location.latitude,
+          parsed.location.longitude,
+          0, // altitude
+          85, // search radius
+          categoryId
+        );
+
+        const filteredSatellites = categoryFilter !== "all" 
+          ? satellites.filter(sat => this.matchesCategoryFilter(sat, categoryFilter))
+          : satellites;
+
+        const response = {
+          query: query,
+          location: {
+            name: parsed.location.name,
+            coordinates: {
+              latitude: parsed.location.latitude,
+              longitude: parsed.location.longitude,
+            },
+          },
+          time: {
+            description: timeDescription,
+            timestamp: targetTime,
+          },
+          categoryFilter: categoryFilter,
+          satellites: filteredSatellites.map(sat => ({
+            noradId: sat.satid,
+            name: sat.satname,
+            position: {
+              latitude: sat.satlat,
+              longitude: sat.satlng,
+              altitude: sat.satalt,
+            },
+            launchDate: sat.launchDate,
+            internationalDesignator: sat.intDesignator,
+          })),
+          count: filteredSatellites.length,
+          summary: `Found ${filteredSatellites.length} ${categoryFilter === "all" ? "" : categoryFilter + " "}satellites above ${parsed.location.name} ${timeDescription}`,
+        };
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify(response, null, 2),
+            },
+          ],
+        };
+      }
+
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Error processing natural language query: ${error instanceof Error ? error.message : String(error)}`,
+          },
+        ],
+        isError: true,
+      };
+    }
+  }
+
+  private matchesCategoryFilter(satellite: any, categoryFilter: string): boolean {
+    const satName = satellite.satname?.toLowerCase() || "";
+    
+    switch (categoryFilter) {
+      case "military":
+        return satName.includes("military") || 
+               satName.includes("defense") || 
+               satName.includes("nrol") ||
+               satName.includes("usa") && satName.includes("classified");
+      
+      case "weather":
+        return satName.includes("weather") || 
+               satName.includes("noaa") || 
+               satName.includes("goes") ||
+               satName.includes("meteosat");
+      
+      case "gps":
+        return satName.includes("gps") || 
+               satName.includes("navstar") ||
+               satName.includes("navigation");
+      
+      case "amateur":
+        return satName.includes("amateur") || 
+               satName.includes("amsat") ||
+               satName.includes("cubesat");
+      
+      case "starlink":
+        return satName.includes("starlink");
+      
+      case "space-stations":
+        return satName.includes("space station") || 
+               satName.includes("iss") ||
+               satName.includes("tiangong");
+      
+      default:
+        return true;
+    }
   }
 
   private async getSatelliteTle(noradId: string): Promise<CallToolResult> {

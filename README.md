@@ -8,6 +8,7 @@ This MCP server integrates with the N2YO.com API to provide satellite tracking c
 
 ### Key Features
 
+- **Natural Language Queries**: Ask questions like "What satellites will be over France at 6:00 tonight?"
 - **TLE Data Access**: Get Two-Line Element data for any satellite by NORAD ID
 - **Category-based Search**: Find satellites by type (military, weather, GPS, etc.)
 - **Country Filtering**: Filter satellites by country or organization
@@ -45,6 +46,18 @@ Configure your N2YO API key for accessing satellite data.
 
 **Parameters:**
 - `apiKey` (required): Your N2YO API key
+
+### `query_satellites_natural`
+Answer natural language questions about satellites (🌟 **NEW FEATURE**).
+
+**Parameters:**
+- `query` (required): Natural language query like "What satellites will be over France at 6:00 tonight?"
+- `categoryFilter` (optional): Filter by category: "all", "military", "weather", "gps", "amateur", "starlink", "space-stations"
+
+**Supported Query Patterns:**
+- **Location**: Countries (France, Germany, USA), cities (Paris, London, New York)
+- **Time**: "tonight", "6:00 PM", "tomorrow morning", "in 2 hours", "now"
+- **Categories**: Can be specified in query or categoryFilter parameter
 
 ### `get_satellite_tle`
 Get Two-Line Element (TLE) data for a specific satellite.
@@ -112,6 +125,34 @@ Available countries and organizations for satellite filtering.
 ### `n2yo://limits/info`
 Information about N2YO API transaction limits and current usage.
 
+## Natural Language Query Capabilities
+
+The `query_satellites_natural` tool can understand and parse various natural language patterns:
+
+### **Supported Locations** (100+ countries and cities)
+- **Countries**: France, Germany, USA, China, Russia, Japan, UK, Canada, Australia, etc.
+- **Major Cities**: Paris, London, New York, Tokyo, Berlin, Moscow, Sydney, etc.
+- **Query Examples**:
+  - "over France"
+  - "above Germany" 
+  - "in New York"
+
+### **Supported Time Expressions**
+- **Relative Times**: "tonight", "tomorrow", "now", "right now"
+- **Specific Times**: "6:00 PM", "18:00", "6:00 tonight"
+- **Future Times**: "in 2 hours", "tomorrow morning"
+- **Query Examples**:
+  - "at 6:00 tonight"
+  - "tomorrow morning"
+  - "in 3 hours"
+
+### **Example Natural Language Queries**
+- "What satellites will be over France at 6:00 tonight?"
+- "Show me military satellites above Germany now"
+- "What Starlink satellites are over New York right now?"
+- "Which satellites will be above Tokyo tomorrow morning?"
+- "Find weather satellites over London in 2 hours"
+
 ## Satellite Categories
 
 The server supports the following satellite categories:
@@ -135,6 +176,36 @@ The server supports the following satellite categories:
   "tool": "set_n2yo_api_key",
   "arguments": {
     "apiKey": "YOUR-N2YO-API-KEY"
+  }
+}
+```
+
+### Natural Language Queries (🌟 **NEW**)
+```json
+{
+  "tool": "query_satellites_natural",
+  "arguments": {
+    "query": "What satellites will be over France at 6:00 tonight?"
+  }
+}
+```
+
+```json
+{
+  "tool": "query_satellites_natural",
+  "arguments": {
+    "query": "Show me military satellites above Germany now",
+    "categoryFilter": "military"
+  }
+}
+```
+
+```json
+{
+  "tool": "query_satellites_natural",
+  "arguments": {
+    "query": "What Starlink satellites are over New York right now?",
+    "categoryFilter": "starlink"
   }
 }
 ```
