@@ -51,6 +51,38 @@ export interface SatelliteInfo {
   noradId: number;
 }
 
+export interface RadioPass {
+  startAz: number;
+  startAzCompass: string;
+  startEl: number;
+  startUTC: number;
+  maxAz: number;
+  maxAzCompass: string;
+  maxEl: number;
+  maxUTC: number;
+  endAz: number;
+  endAzCompass: string;
+  endEl: number;
+  endUTC: number;
+}
+
+export interface RecentLaunch {
+  satid: number;
+  satname: string;
+  intDesignator: string;
+  launchDate: string;
+  satlat: number;
+  satlng: number;
+  satalt: number;
+}
+
+export interface SatelliteSearchResult {
+  satid: number;
+  satname: string;
+  intDesignator: string;
+  launchDate: string;
+}
+
 export interface N2YOResponse<T> {
   info: {
     satname: string;
@@ -72,6 +104,7 @@ export class N2YOClient {
     visualpasses: 0,
     radiopasses: 0,
     above: 0,
+    launchDate: 0,
   };
 
   constructor(apiKey?: string) {
@@ -117,8 +150,12 @@ export class N2YOClient {
       return this.getMockPositionsResponse(params);
     } else if (endpoint.includes("/visualpasses/")) {
       return this.getMockVisualPassesResponse(params);
+    } else if (endpoint.includes("/radiopasses/")) {
+      return this.getMockRadioPassesResponse(params);
     } else if (endpoint.includes("/above/")) {
       return this.getMockAboveResponse(params);
+    } else if (endpoint.includes("/launchDate/")) {
+      return this.getMockRecentLaunchesResponse(params);
     }
     
     return {};
@@ -210,6 +247,70 @@ export class N2YOClient {
       info: {
         satcount: satellites.length,
         transactionscount: ++this.transactionCounts.above,
+      },
+      above: satellites,
+    };
+  }
+
+  private getMockRadioPassesResponse(params: any): any {
+    const passes = [];
+    const count = Math.floor(Math.random() * 3) + 1;
+    
+    for (let i = 0; i < count; i++) {
+      const startTime = Math.floor(Date.now() / 1000) + (i + 1) * 86400;
+      passes.push({
+        startAz: Math.random() * 360,
+        startAzCompass: this.getCompassDirection(Math.random() * 360),
+        startEl: Math.random() * 20 + 10,
+        startUTC: startTime,
+        maxAz: Math.random() * 360,
+        maxAzCompass: this.getCompassDirection(Math.random() * 360),
+        maxEl: 30 + Math.random() * 50,
+        maxUTC: startTime + 180 + Math.random() * 240,
+        endAz: Math.random() * 360,
+        endAzCompass: this.getCompassDirection(Math.random() * 360),
+        endEl: Math.random() * 20 + 10,
+        endUTC: startTime + 400 + Math.random() * 200,
+      });
+    }
+
+    return {
+      info: {
+        satname: "SPACE STATION",
+        satid: parseInt(params.id),
+        transactionscount: ++this.transactionCounts.radiopasses,
+      },
+      passes,
+    };
+  }
+
+  private getMockRecentLaunchesResponse(params: any): any {
+    const satellites = [];
+    const mockLaunches = [
+      "STARLINK-6789", "WEATHER-SAT-42", "GPS III-11", "MILITARY-X1", 
+      "CUBESAT-EDU-1", "EARTH-OBS-7", "COMM-SAT-19", "SCI-SAT-4"
+    ];
+    
+    for (let i = 0; i < mockLaunches.length; i++) {
+      const satId = 50000 + i;
+      const launchDate = new Date();
+      launchDate.setDate(launchDate.getDate() - Math.floor(Math.random() * 30));
+      
+      satellites.push({
+        satid: satId,
+        satname: mockLaunches[i],
+        intDesignator: `24${String(i + 1).padStart(3, '0')}A`,
+        launchDate: launchDate.toISOString().split('T')[0],
+        satlat: Math.random() * 180 - 90,
+        satlng: Math.random() * 360 - 180,
+        satalt: 200 + Math.random() * 800,
+      });
+    }
+
+    return {
+      info: {
+        satcount: satellites.length,
+        transactionscount: ++this.transactionCounts.launchDate,
       },
       above: satellites,
     };
@@ -353,6 +454,99 @@ export class N2YOClient {
       visualpasses: 100,
       radiopasses: 100,
       above: 100,
+      launchDate: 100,
     };
+  }
+
+  async getRadioPasses(
+    noradId: string,
+    observerLat: number,
+    observerLng: number,
+    observerAlt: number = 0,
+    days: number = 10,
+    minElevation: number = 10
+  ): Promise<RadioPass[]> {
+    const response = await this.makeRequest(`/radiopasses/${noradId}/${observerLat}/${observerLng}/${observerAlt}/${days}/${minElevation}`, {
+      id: noradId,
+      observer_lat: observerLat,
+      observer_lng: observerLng,
+      observer_alt: observerAlt,
+      days,
+      min_elevation: minElevation,
+    });
+
+    return response.passes || [];
+  }
+
+  async getRecentLaunches(): Promise<RecentLaunch[]> {
+    const now = new Date();
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const startDate = thirtyDaysAgo.toISOString().split('T')[0];
+    const endDate = now.toISOString().split('T')[0];
+    
+    const response = await this.makeRequest(`/launchDate/${startDate}/${endDate}`, {
+      startDate,
+      endDate,
+    });
+
+    return response.above || [];
+  }
+
+  searchSatellitesByName(query: string): SatelliteSearchResult[] {
+    // Mock search - in real implementation this would query N2YO or use a satellite database
+    const mockSatellites = [
+      { satid: 25544, satname: "ISS (ZARYA)", intDesignator: "1998-067A", launchDate: "1998-11-20" },
+      { satid: 20580, satname: "HST", intDesignator: "1990-037B", launchDate: "1990-04-24" },
+      { satid: 43013, satname: "STARLINK-1007", intDesignator: "2017-073A", launchDate: "2017-12-23" },
+      { satid: 43014, satname: "STARLINK-1002", intDesignator: "2017-073B", launchDate: "2017-12-23" },
+      { satid: 28654, satname: "NOAA 18", intDesignator: "2005-018A", launchDate: "2005-05-20" },
+      { satid: 32786, satname: "AQUA", intDesignator: "2002-022A", launchDate: "2002-05-04" },
+      { satid: 41866, satname: "GEOSAT FOLLOW-ON 2", intDesignator: "2016-064A", launchDate: "2016-08-19" },
+    ];
+
+    const searchTerm = query.toLowerCase();
+    return mockSatellites.filter(sat => 
+      sat.satname.toLowerCase().includes(searchTerm) ||
+      sat.intDesignator.toLowerCase().includes(searchTerm)
+    );
+  }
+
+  async getSatelliteTrajectory(
+    noradId: string,
+    observerLat: number,
+    observerLng: number,
+    observerAlt: number = 0,
+    seconds: number = 300
+  ): Promise<SatellitePosition[]> {
+    // Get multiple positions over time to show trajectory
+    const positions = [];
+    const steps = Math.min(10, Math.max(2, Math.floor(seconds / 30))); // Max 10 points
+    
+    for (let i = 0; i <= steps; i++) {
+      const timeOffset = Math.floor((seconds / steps) * i);
+      const stepPositions = await this.getPositions(noradId, observerLat, observerLng, observerAlt, timeOffset);
+      if (stepPositions.length > 0) {
+        positions.push(stepPositions[0]);
+      }
+    }
+    
+    return positions;
+  }
+
+  getSpaceDebris(
+    observerLat: number,
+    observerLng: number,
+    observerAlt: number = 0,
+    searchRadius: number = 70
+  ): Promise<SatelliteAbove[]> {
+    // Debris is typically in category 0 (uncategorized) or special debris categories
+    // For mock purposes, we'll return some fictional debris objects
+    return this.getSatellitesAbove(observerLat, observerLng, observerAlt, searchRadius, 0).then(sats => {
+      return sats.map(sat => ({
+        ...sat,
+        satname: `DEBRIS-${sat.satid}`,
+        launchDate: "UNKNOWN"
+      })).slice(0, 5); // Limit debris results
+    });
   }
 }
