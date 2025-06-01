@@ -15,6 +15,11 @@ This MCP server integrates with the N2YO.com API to provide satellite tracking c
 - **Real-time Positioning**: Get current satellite positions relative to observer
 - **Pass Predictions**: Predict when satellites will be visible from your location
 - **Overhead Tracking**: Find all satellites currently above a specific location
+- **⭐ Radio Pass Optimization**: Communication windows for amateur radio operators
+- **⭐ Satellite Name Search**: Find satellites by name instead of NORAD ID
+- **⭐ Recent Launch Tracking**: Monitor newly deployed satellites
+- **⭐ Space Debris Monitoring**: Track debris for collision avoidance
+- **⭐ Trajectory Visualization**: Get satellite paths over time
 
 ## Installation
 
@@ -28,12 +33,18 @@ npm run build
 ## Setup
 
 1. **Get N2YO API Key**: Register at [N2YO.com](https://www.n2yo.com/) and generate an API key from your profile
-2. **Configure the server**: Use the `set_n2yo_api_key` tool to configure your API key
+2. **Configure the server**: 
+   - **Option A** (Recommended): Set environment variable `N2YO_API_KEY=your-api-key`
+   - **Option B**: Use the `set_n2yo_api_key` tool to configure your API key during runtime
 3. **Start tracking**: Use the various tools to track satellites
 
 ## Usage
 
 ```bash
+# Option A: Set API key via environment variable (recommended)
+N2YO_API_KEY=your-api-key npm start
+
+# Option B: Start server and set API key via tool later
 npm start
 ```
 
@@ -58,6 +69,20 @@ Answer natural language questions about satellites (🌟 **NEW FEATURE**).
 - **Location**: Countries (France, Germany, USA), cities (Paris, London, New York)
 - **Time**: "tonight", "6:00 PM", "tomorrow morning", "in 2 hours", "now"
 - **Categories**: Can be specified in query or categoryFilter parameter
+
+### `query_satellites_with_tle`
+Find satellites by natural language query and return structured data with Name and TLE (🌟 **NEW FEATURE**).
+
+**Parameters:**
+- `query` (required): Natural language query about satellites (e.g., 'ISS', 'Starlink satellites over California', 'military satellites')
+- `categoryFilter` (optional): Filter by category: "all", "military", "weather", "gps", "amateur", "starlink", "space-stations"
+- `maxResults` (optional): Maximum number of satellites to return (default: 10)
+
+**Returns structured JSON with:**
+- Satellite names and NORAD IDs
+- Complete TLE data for each satellite
+- Position information
+- Query metadata
 
 ### `get_satellite_tle`
 Get Two-Line Element (TLE) data for a specific satellite.
@@ -102,6 +127,49 @@ Get all satellites currently above an observer location.
 - `observerAlt` (optional): Observer altitude in meters (default: 0)
 - `searchRadius` (optional): Search radius in degrees (1-90, default: 70)
 - `categoryFilter` (optional): Filter by category or "all" (default: "all")
+
+### `get_radio_passes` ⭐ **NEW**
+Get upcoming radio communication passes optimized for amateur radio operators.
+
+**Parameters:**
+- `noradId` (required): NORAD catalog number
+- `observerLat` (required): Observer latitude (-90 to 90)
+- `observerLng` (required): Observer longitude (-180 to 180)
+- `observerAlt` (optional): Observer altitude in meters (default: 0)
+- `days` (optional): Days to look ahead (1-10, default: 10)
+- `minElevation` (optional): Minimum elevation in degrees (1-90, default: 10)
+
+### `search_satellites_by_name` ⭐ **NEW**
+Search for satellites by name or international designator.
+
+**Parameters:**
+- `query` (required): Search term (satellite name or international designator)
+
+**Example queries:** "ISS", "Starlink", "NOAA", "GPS", "1998-067A"
+
+### `get_recent_launches` ⭐ **NEW**
+Get satellites launched in the last 30 days.
+
+**Parameters:** None
+
+### `get_space_debris` ⭐ **NEW**
+Track space debris above an observer location for collision avoidance.
+
+**Parameters:**
+- `observerLat` (required): Observer latitude (-90 to 90)
+- `observerLng` (required): Observer longitude (-180 to 180)
+- `observerAlt` (optional): Observer altitude in meters (default: 0)
+- `searchRadius` (optional): Search radius in degrees (1-90, default: 70)
+
+### `get_satellite_trajectory` ⭐ **NEW**
+Get satellite trajectory over time for visualization and planning.
+
+**Parameters:**
+- `noradId` (required): NORAD catalog number
+- `observerLat` (required): Observer latitude (-90 to 90)
+- `observerLng` (required): Observer longitude (-180 to 180)
+- `observerAlt` (optional): Observer altitude in meters (default: 0)
+- `seconds` (optional): Time period in seconds (1-3600, default: 300)
 
 ## Resources Available
 
@@ -270,14 +338,72 @@ The server supports the following satellite categories:
 }
 ```
 
+### Radio Communication Passes ⭐ **NEW**
+```json
+{
+  "tool": "get_radio_passes",
+  "arguments": {
+    "noradId": "25544",
+    "observerLat": 40.7128,
+    "observerLng": -74.0060,
+    "days": 7,
+    "minElevation": 15
+  }
+}
+```
+
+### Search Satellites by Name ⭐ **NEW**
+```json
+{
+  "tool": "search_satellites_by_name",
+  "arguments": {
+    "query": "ISS"
+  }
+}
+```
+
+### Recent Launches ⭐ **NEW**
+```json
+{
+  "tool": "get_recent_launches",
+  "arguments": {}
+}
+```
+
+### Space Debris Tracking ⭐ **NEW**
+```json
+{
+  "tool": "get_space_debris",
+  "arguments": {
+    "observerLat": 40.7128,
+    "observerLng": -74.0060,
+    "searchRadius": 85
+  }
+}
+```
+
+### Satellite Trajectory ⭐ **NEW**
+```json
+{
+  "tool": "get_satellite_trajectory",
+  "arguments": {
+    "noradId": "25544",
+    "observerLat": 40.7128,
+    "observerLng": -74.0060,
+    "seconds": 600
+  }
+}
+```
+
 ## API Limits
 
 N2YO provides free API access with the following daily limits:
 - **TLE requests**: 1,000 per day
 - **Position requests**: 1,000 per day
 - **Visual passes**: 100 per day
-- **Radio passes**: 100 per day
+- **Radio passes**: 100 per day ⭐
 - **Above requests**: 100 per day
+- **Launch date requests**: 100 per day ⭐
 
 ## Development
 
