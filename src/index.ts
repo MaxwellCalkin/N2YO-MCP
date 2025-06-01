@@ -24,7 +24,8 @@ async function main() {
     }
   );
 
-  const n2yoServer = new N2YOServer();
+  const apiKey = process.env.N2YO_API_KEY;
+  const n2yoServer = new N2YOServer(apiKey);
 
   server.setRequestHandler(ListToolsRequestSchema, async () => {
     return {

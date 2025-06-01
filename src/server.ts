@@ -6,20 +6,13 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import { N2YOClient } from "./n2yo-client.js";
 import { SatelliteValidator, ValidationError } from "./satellite-validation.js";
-import { SpaceValidator } from "./space-validation.js";
 import { LocationTimeParser } from "./location-time-parser.js";
-import { UDLAuthenticator } from "./auth.js";
-import { SpaceCatalog } from "./space-catalog.js";
 
 export class N2YOServer {
   private n2yoClient: N2YOClient;
-  private authenticator: UDLAuthenticator;
-  private spaceCatalog: SpaceCatalog;
 
   constructor(apiKey?: string) {
     this.n2yoClient = new N2YOClient(apiKey);
-    this.authenticator = new UDLAuthenticator();
-    this.spaceCatalog = new SpaceCatalog();
   }
 
   getTools(): Tool[] {
@@ -63,6 +56,31 @@ export class N2YOServer {
               ],
               default: "all",
               description: "Optional filter for satellite category",
+            },
+          },
+          required: ["query"],
+        },
+      },
+      {
+        name: "query_satellites_with_tle",
+        description: "Find satellites by natural language query and return structured data with Name and TLE",
+        inputSchema: {
+          type: "object",
+          properties: {
+            query: {
+              type: "string",
+              description: "Natural language query about satellites (e.g., 'ISS', 'Starlink satellites over California', 'military satellites')",
+            },
+            categoryFilter: {
+              type: "string",
+              enum: ["all", "military", "weather", "gps", "amateur", "starlink", "space-stations"],
+              default: "all",
+              description: "Optional filter for satellite category",
+            },
+            maxResults: {
+              type: "number",
+              default: 10,
+              description: "Maximum number of satellites to return (default: 10)",
             },
           },
           required: ["query"],
@@ -198,7 +216,141 @@ export class N2YOServer {
           required: ["noradId", "observerLat", "observerLng"],
         },
       },
-
+      {
+        name: "get_radio_passes",
+        description: "Get upcoming radio communication passes of a satellite for an observer location",
+        inputSchema: {
+          type: "object",
+          properties: {
+            noradId: {
+              type: "string",
+              description: "NORAD catalog number of the satellite",
+            },
+            observerLat: {
+              type: "number",
+              description: "Observer latitude in degrees",
+              minimum: -90,
+              maximum: 90,
+            },
+            observerLng: {
+              type: "number",
+              description: "Observer longitude in degrees",
+              minimum: -180,
+              maximum: 180,
+            },
+            observerAlt: {
+              type: "number",
+              description: "Observer altitude in meters above sea level",
+              default: 0,
+            },
+            days: {
+              type: "number",
+              description: "Number of days to look ahead (max 10)",
+              default: 10,
+              maximum: 10,
+            },
+            minElevation: {
+              type: "number",
+              description: "Minimum elevation in degrees (max 90)",
+              default: 10,
+              maximum: 90,
+            },
+          },
+          required: ["noradId", "observerLat", "observerLng"],
+        },
+      },
+      {
+        name: "search_satellites_by_name",
+        description: "Search for satellites by name or international designator",
+        inputSchema: {
+          type: "object",
+          properties: {
+            query: {
+              type: "string",
+              description: "Search term (satellite name or international designator)",
+            },
+          },
+          required: ["query"],
+        },
+      },
+      {
+        name: "get_recent_launches",
+        description: "Get satellites launched in the last 30 days",
+        inputSchema: {
+          type: "object",
+          properties: {},
+        },
+      },
+      {
+        name: "get_space_debris",
+        description: "Get space debris currently above an observer location",
+        inputSchema: {
+          type: "object",
+          properties: {
+            observerLat: {
+              type: "number",
+              description: "Observer latitude in degrees",
+              minimum: -90,
+              maximum: 90,
+            },
+            observerLng: {
+              type: "number",
+              description: "Observer longitude in degrees",
+              minimum: -180,
+              maximum: 180,
+            },
+            observerAlt: {
+              type: "number",
+              description: "Observer altitude in meters above sea level",
+              default: 0,
+            },
+            searchRadius: {
+              type: "number",
+              description: "Search radius in degrees (max 90)",
+              default: 70,
+              maximum: 90,
+            },
+          },
+          required: ["observerLat", "observerLng"],
+        },
+      },
+      {
+        name: "get_satellite_trajectory",
+        description: "Get satellite trajectory over time period for visualization",
+        inputSchema: {
+          type: "object",
+          properties: {
+            noradId: {
+              type: "string",
+              description: "NORAD catalog number of the satellite",
+            },
+            observerLat: {
+              type: "number",
+              description: "Observer latitude in degrees",
+              minimum: -90,
+              maximum: 90,
+            },
+            observerLng: {
+              type: "number",
+              description: "Observer longitude in degrees",
+              minimum: -180,
+              maximum: 180,
+            },
+            observerAlt: {
+              type: "number",
+              description: "Observer altitude in meters above sea level",
+              default: 0,
+            },
+            seconds: {
+              type: "number",
+              description: "Time period in seconds for trajectory (max 3600)",
+              default: 300,
+              maximum: 3600,
+            },
+          },
+          required: ["noradId", "observerLat", "observerLng"],
+        },
+      },
       {
         name: "get_satellites_above",
         description: "Get all satellites currently above an observer location",
@@ -278,11 +430,11 @@ export class N2YOServer {
           return await this.setApiKey(args.apiKey);
 
         case "query_satellites_natural":
-          return await this.querySatellitesNatural(
-            args.query,
-            args.categoryFilter
-          );
-
+          return await this.querySatellitesNatural(args.query, args.categoryFilter);
+        
+        case "query_satellites_with_tle":
+          return await this.querySatellitesWithTle(args.query, args.categoryFilter, args.maxResults);
+        
         case "get_satellite_tle":
           return await this.getSatelliteTle(args.noradId);
 
@@ -300,7 +452,22 @@ export class N2YOServer {
 
         case "get_satellites_above":
           return await this.getSatellitesAbove(args);
-
+        
+        case "get_radio_passes":
+          return await this.getRadioPasses(args);
+        
+        case "search_satellites_by_name":
+          return await this.searchSatellitesByName(args.query);
+        
+        case "get_recent_launches":
+          return await this.getRecentLaunches();
+        
+        case "get_space_debris":
+          return await this.getSpaceDebris(args);
+        
+        case "get_satellite_trajectory":
+          return await this.getSatelliteTrajectory(args);
+        
         default:
           throw new Error(`Unknown tool: ${name}`);
       }
@@ -395,227 +562,6 @@ export class N2YOServer {
         }`
       );
     }
-  }
-
-  private async configureCredentials(args: any): Promise<CallToolResult> {
-    await this.authenticator.storeCredentials({
-      username: args.username,
-      password: args.password,
-      classification: args.classification,
-      apiEndpoint: args.apiEndpoint,
-    });
-
-    return {
-      content: [
-        {
-          type: "text",
-          text: `Successfully configured UDL credentials for user: ${args.username} (${args.classification})`,
-        },
-      ],
-    };
-  }
-
-  private async loginToUdl(args: any): Promise<CallToolResult> {
-    let username = args.username;
-    let password = args.password;
-
-    if (!username || !password) {
-      const stored = await this.authenticator.loadCredentials();
-      if (!stored) {
-        return {
-          content: [
-            {
-              type: "text",
-              text: "No credentials provided and no stored credentials found. Please configure credentials first.",
-            },
-          ],
-          isError: true,
-        };
-      }
-      username = stored.username;
-      password = "*stored*";
-    }
-
-    const session = await this.authenticator.authenticateUser(
-      username,
-      password
-    );
-
-    return {
-      content: [
-        {
-          type: "text",
-          text: `Successfully authenticated as ${session.username} (${session.classification}). Session expires at ${session.expiresAt}`,
-        },
-      ],
-    };
-  }
-
-  private async logoutFromUdl(): Promise<CallToolResult> {
-    await this.authenticator.logout();
-
-    return {
-      content: [
-        {
-          type: "text",
-          text: "Successfully logged out from UDL",
-        },
-      ],
-    };
-  }
-
-  private async getAuthStatus(): Promise<CallToolResult> {
-    const status = await this.authenticator.getAuthenticationStatus();
-
-    return {
-      content: [
-        {
-          type: "text",
-          text: JSON.stringify(status, null, 2),
-        },
-      ],
-    };
-  }
-
-  private async checkAuthentication(
-    requiredPermission?: string
-  ): Promise<void> {
-    const status = await this.authenticator.getAuthenticationStatus();
-    if (!status.isAuthenticated) {
-      throw new Error(
-        "Authentication required. Please login to UDL first using the 'login_to_udl' tool."
-      );
-    }
-
-    if (requiredPermission) {
-      const hasPermission = await this.authenticator.validatePermission(
-        requiredPermission
-      );
-      if (!hasPermission) {
-        throw new Error(
-          `Insufficient permissions. Required: ${requiredPermission}`
-        );
-      }
-    }
-
-    // Set API headers for authenticated requests
-    try {
-      const headers = await this.authenticator.getApiHeaders();
-      this.spaceCatalog.setApiHeaders(headers);
-    } catch (error) {
-      throw new Error("Failed to get API authentication headers");
-    }
-  }
-
-  private async getSpaceObject(noradId: string): Promise<CallToolResult> {
-    await this.checkAuthentication("objects:get");
-    SpaceValidator.validateNoradId(noradId);
-
-    const spaceObject = await this.spaceCatalog.getObject(noradId);
-    if (!spaceObject) {
-      return {
-        content: [
-          {
-            type: "text",
-            text: `No space object found with NORAD ID: ${noradId}`,
-          },
-        ],
-      };
-    }
-
-    return {
-      content: [
-        {
-          type: "text",
-          text: JSON.stringify(spaceObject, null, 2),
-        },
-      ],
-    };
-  }
-
-  private async searchSpaceObjects(criteria: any): Promise<CallToolResult> {
-    await this.checkAuthentication("objects:search");
-    const results = await this.spaceCatalog.searchObjects(criteria);
-    return {
-      content: [
-        {
-          type: "text",
-          text: JSON.stringify(
-            { objects: results, count: results.length },
-            null,
-            2
-          ),
-        },
-      ],
-    };
-  }
-
-  private async getConjunctions(args: any): Promise<CallToolResult> {
-    await this.checkAuthentication("conjunctions:read");
-    SpaceValidator.validateConjunctionRequest(args);
-
-    const conjunctions = await this.spaceCatalog.getConjunctions(
-      args.primaryObject,
-      args.timeWindow,
-      args.threshold || 5.0
-    );
-
-    return {
-      content: [
-        {
-          type: "text",
-          text: JSON.stringify(
-            { conjunctions, count: conjunctions.length },
-            null,
-            2
-          ),
-        },
-      ],
-    };
-  }
-
-  private async getOrbitalPrediction(args: any): Promise<CallToolResult> {
-    await this.checkAuthentication("predictions:read");
-    SpaceValidator.validateNoradId(args.noradId);
-    SpaceValidator.validateTimestamp(args.predictionTime);
-
-    const prediction = await this.spaceCatalog.predictOrbit(
-      args.noradId,
-      args.predictionTime,
-      args.propagationModel || "SGP4"
-    );
-
-    return {
-      content: [
-        {
-          type: "text",
-          text: JSON.stringify(prediction, null, 2),
-        },
-      ],
-    };
-  }
-
-  private async getSpaceFenceData(args: any): Promise<CallToolResult> {
-    await this.checkAuthentication("spacefence:read");
-    SpaceValidator.validateNoradId(args.noradId);
-
-    const observations = await this.spaceCatalog.getSpaceFenceObservations(
-      args.noradId,
-      args.timeRange
-    );
-
-    return {
-      content: [
-        {
-          type: "text",
-          text: JSON.stringify(
-            { observations, count: observations.length },
-            null,
-            2
-          ),
-        },
-      ],
-    };
   }
 
   private async setApiKey(apiKey: string): Promise<CallToolResult> {
@@ -849,6 +795,86 @@ export class N2YOServer {
     }
   }
 
+  private async querySatellitesWithTle(query: string, categoryFilter: string = "all", maxResults: number = 10): Promise<CallToolResult> {
+    try {
+      // First, use the existing natural language query to find satellites
+      const naturalQueryResult = await this.querySatellitesNatural(query, categoryFilter);
+      
+      if (naturalQueryResult.isError) {
+        return naturalQueryResult;
+      }
+
+      // Parse the response to extract satellite data
+      const responseText = naturalQueryResult.content[0]?.text;
+      if (typeof responseText !== 'string') {
+        throw new Error('Invalid response format from natural query');
+      }
+      const naturalData = JSON.parse(responseText);
+      const satellites = naturalData.satellites || [];
+
+      // Limit results
+      const limitedSatellites = satellites.slice(0, maxResults);
+
+      // Get TLE data for each satellite
+      const satellitesWithTle = [];
+      for (const satellite of limitedSatellites) {
+        try {
+          const tleResult = await this.getSatelliteTle(String(satellite.noradId));
+          if (!tleResult.isError) {
+            const tleResponseText = tleResult.content[0]?.text;
+            if (typeof tleResponseText !== 'string') {
+              continue;
+            }
+            const tleData = JSON.parse(tleResponseText);
+            satellitesWithTle.push({
+              name: satellite.name,
+              noradId: String(satellite.noradId),
+              tle: tleData,
+              position: satellite.position,
+              launchDate: satellite.launchDate,
+              internationalDesignator: satellite.internationalDesignator,
+            });
+          }
+        } catch (error) {
+          // Skip satellites that don't have TLE data available
+          console.warn(`Could not get TLE for satellite ${satellite.noradId}: ${error}`);
+        }
+      }
+
+      // Return structured response
+      const response = {
+        query: query,
+        location: naturalData.location,
+        time: naturalData.time,
+        categoryFilter: categoryFilter,
+        satellites: satellitesWithTle,
+        count: satellitesWithTle.length,
+        totalFound: satellites.length,
+        summary: `Found ${satellitesWithTle.length} satellites with TLE data (${satellites.length} total matches)`,
+      };
+
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(response, null, 2),
+          },
+        ],
+      };
+
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Error processing query with TLE: ${error instanceof Error ? error.message : String(error)}`,
+          },
+        ],
+        isError: true,
+      };
+    }
+  }
+
   private async getSatelliteTle(noradId: string): Promise<CallToolResult> {
     SatelliteValidator.validateNoradId(noradId);
 
@@ -961,6 +987,148 @@ export class N2YOServer {
             null,
             2
           ),
+        },
+      ],
+    };
+  }
+
+  private async getRadioPasses(args: any): Promise<CallToolResult> {
+    SatelliteValidator.validateVisualPassRequest(args); // Same validation as visual passes
+    
+    const passes = await this.n2yoClient.getRadioPasses(
+      args.noradId,
+      args.observerLat,
+      args.observerLng,
+      args.observerAlt || 0,
+      args.days || 10,
+      args.minElevation || 10
+    );
+    
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({ 
+            satellite: { noradId: args.noradId },
+            observer: {
+              latitude: args.observerLat,
+              longitude: args.observerLng,
+              altitude: args.observerAlt || 0,
+            },
+            radioPasses: passes, 
+            count: passes.length,
+            note: "Radio passes optimized for communication windows with elevation and timing data"
+          }, null, 2),
+        },
+      ],
+    };
+  }
+
+  private async searchSatellitesByName(query: string): Promise<CallToolResult> {
+    if (!query || query.trim().length === 0) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: "Search query cannot be empty",
+          },
+        ],
+        isError: true,
+      };
+    }
+
+    const results = this.n2yoClient.searchSatellitesByName(query.trim());
+    
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({ 
+            query: query.trim(),
+            satellites: results, 
+            count: results.length,
+            note: "Use the NORAD ID (satid) to get more detailed information about specific satellites"
+          }, null, 2),
+        },
+      ],
+    };
+  }
+
+  private async getRecentLaunches(): Promise<CallToolResult> {
+    const launches = await this.n2yoClient.getRecentLaunches();
+    
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({ 
+            timeRange: "Last 30 days",
+            recentLaunches: launches, 
+            count: launches.length,
+            note: "Recently launched satellites with current position data"
+          }, null, 2),
+        },
+      ],
+    };
+  }
+
+  private async getSpaceDebris(args: any): Promise<CallToolResult> {
+    SatelliteValidator.validateAboveRequest(args);
+    
+    const debris = await this.n2yoClient.getSpaceDebris(
+      args.observerLat,
+      args.observerLng,
+      args.observerAlt || 0,
+      args.searchRadius || 70
+    );
+    
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({ 
+            observer: {
+              latitude: args.observerLat,
+              longitude: args.observerLng,
+              altitude: args.observerAlt || 0,
+            },
+            searchRadius: args.searchRadius || 70,
+            spaceDebris: debris, 
+            count: debris.length,
+            warning: "Space debris tracking is important for collision avoidance"
+          }, null, 2),
+        },
+      ],
+    };
+  }
+
+  private async getSatelliteTrajectory(args: any): Promise<CallToolResult> {
+    SatelliteValidator.validatePositionRequest(args);
+    
+    const trajectory = await this.n2yoClient.getSatelliteTrajectory(
+      args.noradId,
+      args.observerLat,
+      args.observerLng,
+      args.observerAlt || 0,
+      args.seconds || 300
+    );
+    
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({ 
+            satellite: { noradId: args.noradId },
+            observer: {
+              latitude: args.observerLat,
+              longitude: args.observerLng,
+              altitude: args.observerAlt || 0,
+            },
+            timeSpan: args.seconds || 300,
+            trajectory: trajectory, 
+            count: trajectory.length,
+            note: "Position data points over time for trajectory visualization"
+          }, null, 2),
         },
       ],
     };
