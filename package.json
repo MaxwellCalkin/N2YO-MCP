@@ -10,15 +10,24 @@
     "dev": "tsc --watch",
     "prepare": "npm run build"
   },
-  "keywords": ["mcp", "server", "n2yo", "satellite", "tracking", "tle", "space", "orbital"],
+  "keywords": [
+    "mcp",
+    "server",
+    "n2yo",
+    "satellite",
+    "tracking",
+    "tle",
+    "space",
+    "orbital"
+  ],
   "author": "",
   "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0"
   },
   "devDependencies": {
-    "@types/node": "^20.0.0",
-    "typescript": "^5.0.0"
+    "@types/node": "^20.17.57",
+    "typescript": "^5.8.3"
   },
   "engines": {
     "node": ">=18"
