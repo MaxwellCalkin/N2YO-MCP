@@ -6,13 +6,20 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import { N2YOClient } from "./n2yo-client.js";
 import { SatelliteValidator, ValidationError } from "./satellite-validation.js";
+import { SpaceValidator } from "./space-validation.js";
 import { LocationTimeParser } from "./location-time-parser.js";
+import { UDLAuthenticator } from "./auth.js";
+import { SpaceCatalog } from "./space-catalog.js";
 
 export class N2YOServer {
   private n2yoClient: N2YOClient;
+  private authenticator: UDLAuthenticator;
+  private spaceCatalog: SpaceCatalog;
 
   constructor(apiKey?: string) {
     this.n2yoClient = new N2YOClient(apiKey);
+    this.authenticator = new UDLAuthenticator();
+    this.spaceCatalog = new SpaceCatalog();
   }
 
   getTools(): Tool[] {
@@ -33,17 +40,27 @@ export class N2YOServer {
       },
       {
         name: "query_satellites_natural",
-        description: "Answer natural language questions about satellites like 'What satellites will be over France at 6:00 tonight?'",
+        description:
+          "Answer natural language questions about satellites like 'What satellites will be over France at 6:00 tonight?'",
         inputSchema: {
           type: "object",
           properties: {
             query: {
               type: "string",
-              description: "Natural language query about satellites (e.g., 'What satellites will be over France at 6:00 tonight?', 'Show me military satellites above Germany now')",
+              description:
+                "Natural language query about satellites (e.g., 'What satellites will be over France at 6:00 tonight?', 'Show me military satellites above Germany now')",
             },
             categoryFilter: {
               type: "string",
-              enum: ["all", "military", "weather", "gps", "amateur", "starlink", "space-stations"],
+              enum: [
+                "all",
+                "military",
+                "weather",
+                "gps",
+                "amateur",
+                "starlink",
+                "space-stations",
+              ],
               default: "all",
               description: "Optional filter for satellite category",
             },
@@ -53,7 +70,8 @@ export class N2YOServer {
       },
       {
         name: "get_satellite_tle",
-        description: "Get Two-Line Element (TLE) data for a satellite by NORAD ID",
+        description:
+          "Get Two-Line Element (TLE) data for a satellite by NORAD ID",
         inputSchema: {
           type: "object",
           properties: {
@@ -67,18 +85,31 @@ export class N2YOServer {
       },
       {
         name: "get_satellites_by_category",
-        description: "Get satellites by predefined categories (military, weather, GPS, etc.)",
+        description:
+          "Get satellites by predefined categories (military, weather, GPS, etc.)",
         inputSchema: {
           type: "object",
           properties: {
             category: {
               type: "string",
-              enum: ["military", "weather", "gps", "navigation", "amateur", "geostationary", "noaa", "starlink", "space-stations", "earth-resources"],
+              enum: [
+                "military",
+                "weather",
+                "gps",
+                "navigation",
+                "amateur",
+                "geostationary",
+                "noaa",
+                "starlink",
+                "space-stations",
+                "earth-resources",
+              ],
               description: "Satellite category to retrieve",
             },
             country: {
               type: "string",
-              description: "Filter by country or organization (e.g., 'usa', 'china', 'russia')",
+              description:
+                "Filter by country or organization (e.g., 'usa', 'china', 'russia')",
             },
           },
           required: ["category"],
@@ -86,7 +117,8 @@ export class N2YOServer {
       },
       {
         name: "get_satellite_position",
-        description: "Get current position of a satellite relative to an observer location",
+        description:
+          "Get current position of a satellite relative to an observer location",
         inputSchema: {
           type: "object",
           properties: {
@@ -113,7 +145,8 @@ export class N2YOServer {
             },
             seconds: {
               type: "number",
-              description: "Number of seconds in the future for prediction (max 300)",
+              description:
+                "Number of seconds in the future for prediction (max 300)",
               default: 0,
               maximum: 300,
             },
@@ -123,7 +156,8 @@ export class N2YOServer {
       },
       {
         name: "get_visual_passes",
-        description: "Get upcoming visual passes of a satellite for an observer location",
+        description:
+          "Get upcoming visual passes of a satellite for an observer location",
         inputSchema: {
           type: "object",
           properties: {
@@ -164,7 +198,7 @@ export class N2YOServer {
           required: ["noradId", "observerLat", "observerLng"],
         },
       },
-      {
+
       {
         name: "get_satellites_above",
         description: "Get all satellites currently above an observer location",
@@ -224,7 +258,8 @@ export class N2YOServer {
       {
         uri: "n2yo://countries/list",
         name: "Countries and Organizations",
-        description: "Available countries and organizations for satellite filtering",
+        description:
+          "Available countries and organizations for satellite filtering",
         mimeType: "application/json",
       },
       {
@@ -241,25 +276,31 @@ export class N2YOServer {
       switch (name) {
         case "set_n2yo_api_key":
           return await this.setApiKey(args.apiKey);
-        
+
         case "query_satellites_natural":
-          return await this.querySatellitesNatural(args.query, args.categoryFilter);
-        
+          return await this.querySatellitesNatural(
+            args.query,
+            args.categoryFilter
+          );
+
         case "get_satellite_tle":
           return await this.getSatelliteTle(args.noradId);
-        
+
         case "get_satellites_by_category":
-          return await this.getSatellitesByCategory(args.category, args.country);
-        
+          return await this.getSatellitesByCategory(
+            args.category,
+            args.country
+          );
+
         case "get_satellite_position":
           return await this.getSatellitePosition(args);
-        
+
         case "get_visual_passes":
           return await this.getVisualPasses(args);
-        
+
         case "get_satellites_above":
           return await this.getSatellitesAbove(args);
-        
+
         default:
           throw new Error(`Unknown tool: ${name}`);
       }
@@ -268,7 +309,9 @@ export class N2YOServer {
         content: [
           {
             type: "text",
-            text: `Error: ${error instanceof Error ? error.message : String(error)}`,
+            text: `Error: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
           },
         ],
         isError: true,
@@ -294,7 +337,7 @@ export class N2YOServer {
               },
             ],
           };
-        
+
         case "n2yo://categories/list":
           const categories = this.n2yoClient.getAvailableCategories();
           return {
@@ -306,7 +349,7 @@ export class N2YOServer {
               },
             ],
           };
-        
+
         case "n2yo://countries/list":
           const countries = this.n2yoClient.getAvailableCountries();
           return {
@@ -318,16 +361,18 @@ export class N2YOServer {
               },
             ],
           };
-        
+
         case "n2yo://limits/info":
           const limits = {
             daily_limits: this.n2yoClient.getApiLimits(),
             current_usage: this.n2yoClient.getTransactionCounts(),
             remaining: Object.fromEntries(
-              Object.entries(this.n2yoClient.getApiLimits()).map(([key, limit]) => [
-                key,
-                limit - (this.n2yoClient.getTransactionCounts() as any)[key]
-              ])
+              Object.entries(this.n2yoClient.getApiLimits()).map(
+                ([key, limit]) => [
+                  key,
+                  limit - (this.n2yoClient.getTransactionCounts() as any)[key],
+                ]
+              )
             ),
           };
           return {
@@ -339,12 +384,16 @@ export class N2YOServer {
               },
             ],
           };
-        
+
         default:
           throw new Error(`Unknown resource: ${uri}`);
       }
     } catch (error) {
-      throw new Error(`Failed to read resource ${uri}: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(
+        `Failed to read resource ${uri}: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
     }
   }
 
@@ -387,8 +436,11 @@ export class N2YOServer {
       password = "*stored*";
     }
 
-    const session = await this.authenticator.authenticateUser(username, password);
-    
+    const session = await this.authenticator.authenticateUser(
+      username,
+      password
+    );
+
     return {
       content: [
         {
@@ -401,7 +453,7 @@ export class N2YOServer {
 
   private async logoutFromUdl(): Promise<CallToolResult> {
     await this.authenticator.logout();
-    
+
     return {
       content: [
         {
@@ -414,7 +466,7 @@ export class N2YOServer {
 
   private async getAuthStatus(): Promise<CallToolResult> {
     const status = await this.authenticator.getAuthenticationStatus();
-    
+
     return {
       content: [
         {
@@ -425,16 +477,24 @@ export class N2YOServer {
     };
   }
 
-  private async checkAuthentication(requiredPermission?: string): Promise<void> {
+  private async checkAuthentication(
+    requiredPermission?: string
+  ): Promise<void> {
     const status = await this.authenticator.getAuthenticationStatus();
     if (!status.isAuthenticated) {
-      throw new Error("Authentication required. Please login to UDL first using the 'login_to_udl' tool.");
+      throw new Error(
+        "Authentication required. Please login to UDL first using the 'login_to_udl' tool."
+      );
     }
 
     if (requiredPermission) {
-      const hasPermission = await this.authenticator.validatePermission(requiredPermission);
+      const hasPermission = await this.authenticator.validatePermission(
+        requiredPermission
+      );
       if (!hasPermission) {
-        throw new Error(`Insufficient permissions. Required: ${requiredPermission}`);
+        throw new Error(
+          `Insufficient permissions. Required: ${requiredPermission}`
+        );
       }
     }
 
@@ -447,11 +507,10 @@ export class N2YOServer {
     }
   }
 
-
   private async getSpaceObject(noradId: string): Promise<CallToolResult> {
     await this.checkAuthentication("objects:get");
     SpaceValidator.validateNoradId(noradId);
-    
+
     const spaceObject = await this.spaceCatalog.getObject(noradId);
     if (!spaceObject) {
       return {
@@ -481,7 +540,11 @@ export class N2YOServer {
       content: [
         {
           type: "text",
-          text: JSON.stringify({ objects: results, count: results.length }, null, 2),
+          text: JSON.stringify(
+            { objects: results, count: results.length },
+            null,
+            2
+          ),
         },
       ],
     };
@@ -490,18 +553,22 @@ export class N2YOServer {
   private async getConjunctions(args: any): Promise<CallToolResult> {
     await this.checkAuthentication("conjunctions:read");
     SpaceValidator.validateConjunctionRequest(args);
-    
+
     const conjunctions = await this.spaceCatalog.getConjunctions(
       args.primaryObject,
       args.timeWindow,
       args.threshold || 5.0
     );
-    
+
     return {
       content: [
         {
           type: "text",
-          text: JSON.stringify({ conjunctions, count: conjunctions.length }, null, 2),
+          text: JSON.stringify(
+            { conjunctions, count: conjunctions.length },
+            null,
+            2
+          ),
         },
       ],
     };
@@ -511,13 +578,13 @@ export class N2YOServer {
     await this.checkAuthentication("predictions:read");
     SpaceValidator.validateNoradId(args.noradId);
     SpaceValidator.validateTimestamp(args.predictionTime);
-    
+
     const prediction = await this.spaceCatalog.predictOrbit(
       args.noradId,
       args.predictionTime,
       args.propagationModel || "SGP4"
     );
-    
+
     return {
       content: [
         {
@@ -528,21 +595,24 @@ export class N2YOServer {
     };
   }
 
-
   private async getSpaceFenceData(args: any): Promise<CallToolResult> {
     await this.checkAuthentication("spacefence:read");
     SpaceValidator.validateNoradId(args.noradId);
-    
+
     const observations = await this.spaceCatalog.getSpaceFenceObservations(
       args.noradId,
       args.timeRange
     );
-    
+
     return {
       content: [
         {
           type: "text",
-          text: JSON.stringify({ observations, count: observations.length }, null, 2),
+          text: JSON.stringify(
+            { observations, count: observations.length },
+            null,
+            2
+          ),
         },
       ],
     };
@@ -551,7 +621,7 @@ export class N2YOServer {
   private async setApiKey(apiKey: string): Promise<CallToolResult> {
     SatelliteValidator.validateApiKey(apiKey);
     this.n2yoClient.setApiKey(apiKey);
-    
+
     return {
       content: [
         {
@@ -562,11 +632,14 @@ export class N2YOServer {
     };
   }
 
-  private async querySatellitesNatural(query: string, categoryFilter: string = "all"): Promise<CallToolResult> {
+  private async querySatellitesNatural(
+    query: string,
+    categoryFilter: string = "all"
+  ): Promise<CallToolResult> {
     try {
       // Parse the natural language query
       const parsed = LocationTimeParser.extractLocationAndTime(query);
-      
+
       if (!parsed.location) {
         return {
           content: [
@@ -580,17 +653,22 @@ export class N2YOServer {
       }
 
       // Default to current time if no time specified
-      const targetTime = parsed.time?.timestamp || Math.floor(Date.now() / 1000);
+      const targetTime =
+        parsed.time?.timestamp || Math.floor(Date.now() / 1000);
       const timeDescription = parsed.time?.description || "right now";
 
       // Determine which satellites to get based on the query context
       let satellites;
-      const categoryId = categoryFilter !== "all" ? this.n2yoClient.getCategoryId(categoryFilter) : 0;
+      const categoryId =
+        categoryFilter !== "all"
+          ? this.n2yoClient.getCategoryId(categoryFilter)
+          : 0;
 
       // Check if query is asking about future time (for predictions) or current/past time (for current position)
       const timeDiff = targetTime - Math.floor(Date.now() / 1000);
-      
-      if (timeDiff > 300) { // More than 5 minutes in the future
+
+      if (timeDiff > 300) {
+        // More than 5 minutes in the future
         // This is a future prediction query - but N2YO "above" endpoint only shows current satellites
         // We'll get current satellites and note the limitation
         satellites = await this.n2yoClient.getSatellitesAbove(
@@ -601,9 +679,12 @@ export class N2YOServer {
           categoryId
         );
 
-        const filteredSatellites = categoryFilter !== "all" 
-          ? satellites.filter(sat => this.matchesCategoryFilter(sat, categoryFilter))
-          : satellites;
+        const filteredSatellites =
+          categoryFilter !== "all"
+            ? satellites.filter((sat) =>
+                this.matchesCategoryFilter(sat, categoryFilter)
+              )
+            : satellites;
 
         const response = {
           query: query,
@@ -619,7 +700,7 @@ export class N2YOServer {
             note: "Showing satellites currently above the location. N2YO API provides current positions, not future predictions for overhead satellites.",
           },
           categoryFilter: categoryFilter,
-          satellites: filteredSatellites.map(sat => ({
+          satellites: filteredSatellites.map((sat) => ({
             noradId: sat.satid,
             name: sat.satname,
             position: {
@@ -631,7 +712,9 @@ export class N2YOServer {
             internationalDesignator: sat.intDesignator,
           })),
           count: filteredSatellites.length,
-          summary: `Found ${filteredSatellites.length} ${categoryFilter === "all" ? "" : categoryFilter + " "}satellites currently above ${parsed.location.name}`,
+          summary: `Found ${filteredSatellites.length} ${
+            categoryFilter === "all" ? "" : categoryFilter + " "
+          }satellites currently above ${parsed.location.name}`,
         };
 
         return {
@@ -642,7 +725,6 @@ export class N2YOServer {
             },
           ],
         };
-
       } else {
         // This is a current or near-current time query
         satellites = await this.n2yoClient.getSatellitesAbove(
@@ -653,9 +735,12 @@ export class N2YOServer {
           categoryId
         );
 
-        const filteredSatellites = categoryFilter !== "all" 
-          ? satellites.filter(sat => this.matchesCategoryFilter(sat, categoryFilter))
-          : satellites;
+        const filteredSatellites =
+          categoryFilter !== "all"
+            ? satellites.filter((sat) =>
+                this.matchesCategoryFilter(sat, categoryFilter)
+              )
+            : satellites;
 
         const response = {
           query: query,
@@ -671,7 +756,7 @@ export class N2YOServer {
             timestamp: targetTime,
           },
           categoryFilter: categoryFilter,
-          satellites: filteredSatellites.map(sat => ({
+          satellites: filteredSatellites.map((sat) => ({
             noradId: sat.satid,
             name: sat.satname,
             position: {
@@ -683,7 +768,9 @@ export class N2YOServer {
             internationalDesignator: sat.intDesignator,
           })),
           count: filteredSatellites.length,
-          summary: `Found ${filteredSatellites.length} ${categoryFilter === "all" ? "" : categoryFilter + " "}satellites above ${parsed.location.name} ${timeDescription}`,
+          summary: `Found ${filteredSatellites.length} ${
+            categoryFilter === "all" ? "" : categoryFilter + " "
+          }satellites above ${parsed.location.name} ${timeDescription}`,
         };
 
         return {
@@ -695,13 +782,14 @@ export class N2YOServer {
           ],
         };
       }
-
     } catch (error) {
       return {
         content: [
           {
             type: "text",
-            text: `Error processing natural language query: ${error instanceof Error ? error.message : String(error)}`,
+            text: `Error processing natural language query: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
           },
         ],
         isError: true,
@@ -709,40 +797,53 @@ export class N2YOServer {
     }
   }
 
-  private matchesCategoryFilter(satellite: any, categoryFilter: string): boolean {
+  private matchesCategoryFilter(
+    satellite: any,
+    categoryFilter: string
+  ): boolean {
     const satName = satellite.satname?.toLowerCase() || "";
-    
+
     switch (categoryFilter) {
       case "military":
-        return satName.includes("military") || 
-               satName.includes("defense") || 
-               satName.includes("nrol") ||
-               satName.includes("usa") && satName.includes("classified");
-      
+        return (
+          satName.includes("military") ||
+          satName.includes("defense") ||
+          satName.includes("nrol") ||
+          (satName.includes("usa") && satName.includes("classified"))
+        );
+
       case "weather":
-        return satName.includes("weather") || 
-               satName.includes("noaa") || 
-               satName.includes("goes") ||
-               satName.includes("meteosat");
-      
+        return (
+          satName.includes("weather") ||
+          satName.includes("noaa") ||
+          satName.includes("goes") ||
+          satName.includes("meteosat")
+        );
+
       case "gps":
-        return satName.includes("gps") || 
-               satName.includes("navstar") ||
-               satName.includes("navigation");
-      
+        return (
+          satName.includes("gps") ||
+          satName.includes("navstar") ||
+          satName.includes("navigation")
+        );
+
       case "amateur":
-        return satName.includes("amateur") || 
-               satName.includes("amsat") ||
-               satName.includes("cubesat");
-      
+        return (
+          satName.includes("amateur") ||
+          satName.includes("amsat") ||
+          satName.includes("cubesat")
+        );
+
       case "starlink":
         return satName.includes("starlink");
-      
+
       case "space-stations":
-        return satName.includes("space station") || 
-               satName.includes("iss") ||
-               satName.includes("tiangong");
-      
+        return (
+          satName.includes("space station") ||
+          satName.includes("iss") ||
+          satName.includes("tiangong")
+        );
+
       default:
         return true;
     }
@@ -750,9 +851,9 @@ export class N2YOServer {
 
   private async getSatelliteTle(noradId: string): Promise<CallToolResult> {
     SatelliteValidator.validateNoradId(noradId);
-    
+
     const tleData = await this.n2yoClient.getTle(noradId);
-    
+
     return {
       content: [
         {
@@ -763,20 +864,25 @@ export class N2YOServer {
     };
   }
 
-  private async getSatellitesByCategory(category: string, country?: string): Promise<CallToolResult> {
+  private async getSatellitesByCategory(
+    category: string,
+    country?: string
+  ): Promise<CallToolResult> {
     SatelliteValidator.validateCategory(category);
     SatelliteValidator.validateCountry(country);
-    
+
     const categories = this.n2yoClient.getAvailableCategories();
-    const categoryInfo = categories.find(cat => cat.name === category);
-    
+    const categoryInfo = categories.find((cat) => cat.name === category);
+
     const result = {
       category: categoryInfo,
       country_filter: country,
       note: "Use the N2YO website to browse satellites by category and country, then use get_satellite_tle with specific NORAD IDs",
-      website_url: `https://www.n2yo.com/satellites/?c=${categoryInfo?.id || 0}`,
+      website_url: `https://www.n2yo.com/satellites/?c=${
+        categoryInfo?.id || 0
+      }`,
     };
-    
+
     return {
       content: [
         {
@@ -789,7 +895,7 @@ export class N2YOServer {
 
   private async getSatellitePosition(args: any): Promise<CallToolResult> {
     SatelliteValidator.validatePositionRequest(args);
-    
+
     const positions = await this.n2yoClient.getPositions(
       args.noradId,
       args.observerLat,
@@ -797,7 +903,7 @@ export class N2YOServer {
       args.observerAlt || 0,
       args.seconds || 0
     );
-    
+
     return {
       content: [
         {
@@ -810,7 +916,7 @@ export class N2YOServer {
 
   private async getVisualPasses(args: any): Promise<CallToolResult> {
     SatelliteValidator.validateVisualPassRequest(args);
-    
+
     const passes = await this.n2yoClient.getVisualPasses(
       args.noradId,
       args.observerLat,
@@ -819,7 +925,7 @@ export class N2YOServer {
       args.days || 10,
       args.minVisibility || 300
     );
-    
+
     return {
       content: [
         {
@@ -832,11 +938,12 @@ export class N2YOServer {
 
   private async getSatellitesAbove(args: any): Promise<CallToolResult> {
     SatelliteValidator.validateAboveRequest(args);
-    
-    const categoryId = args.categoryFilter && args.categoryFilter !== "all" 
-      ? this.n2yoClient.getCategoryId(args.categoryFilter)
-      : 0;
-    
+
+    const categoryId =
+      args.categoryFilter && args.categoryFilter !== "all"
+        ? this.n2yoClient.getCategoryId(args.categoryFilter)
+        : 0;
+
     const satellites = await this.n2yoClient.getSatellitesAbove(
       args.observerLat,
       args.observerLng,
@@ -844,12 +951,16 @@ export class N2YOServer {
       args.searchRadius || 70,
       categoryId
     );
-    
+
     return {
       content: [
         {
           type: "text",
-          text: JSON.stringify({ satellites, count: satellites.length }, null, 2),
+          text: JSON.stringify(
+            { satellites, count: satellites.length },
+            null,
+            2
+          ),
         },
       ],
     };
